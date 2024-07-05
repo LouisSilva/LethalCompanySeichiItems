@@ -81,7 +81,6 @@ public class KanaboItem : GrabbableObject
         playerHeldBy.activatingItem = true;
         playerHeldBy.twoHanded = true;
         playerHeldBy.playerBodyAnimator.ResetTrigger(ShovelHit);
-        LogDebug("Setting bool of reel up parameter to TRUE.");
         playerHeldBy.playerBodyAnimator.SetBool(ReelingUp, true);
         yield return null;
 
@@ -94,15 +93,13 @@ public class KanaboItem : GrabbableObject
             _origionalPlayerAnimatorSpeed = playerHeldBy.playerBodyAnimator.speed;
             float animationOrigionalLength = reelingUpClip.length;
             float newSpeed = animationOrigionalLength / reelUpTime;
-
-            LogDebug("Changing the speed of the animation.");
+            
             _animatorSpeedCurrentlyModified = true;
             playerHeldBy.playerBodyAnimator.speed = newSpeed;
             kanaboAudio.PlayOneShot(reelUp);
             ReelUpSfxServerRpc();
         
             yield return new WaitForSeconds(reelUpTime);
-            LogDebug($"Waited for {reelUpTime} seconds");
 
             playerHeldBy.playerBodyAnimator.speed = _origionalPlayerAnimatorSpeed;
             _animatorSpeedCurrentlyModified = false;
@@ -113,15 +110,11 @@ public class KanaboItem : GrabbableObject
         }
         
         yield return new WaitUntil(() => !_isHoldingButton || !isHeld);
-        LogDebug($"Waited until '_isHoldingButton' was false. Now swinging kanabo.");
         SwingShovel(!isHeld);
         yield return new WaitForSeconds(0.13f);
-        LogDebug("Waited for 0.13 seconds.");
         yield return new WaitForEndOfFrame();
-        LogDebug("Waited till end of frame.");
         HitKanabo(!isHeld);
         yield return new WaitForSeconds(0.3f);
-        LogDebug("Waited for 0.3 seconds.");
         _reelingUp = false;
         _reelingUpCoroutine = null;
     }

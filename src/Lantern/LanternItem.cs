@@ -1,134 +1,94 @@
-﻿using GameNetcodeStuff;
+﻿using System;
+using BepInEx.Logging;
 using Unity.Netcode;
 using UnityEngine;
+using Logger = BepInEx.Logging.Logger;
+using Random = UnityEngine.Random;
 
 namespace LethalCompanySeichiItems.Lantern;
 
 public class LanternItem : GrabbableObject
 {
+    private ManualLogSource _mls;
+    private string _lanternId;
+    
     [Space(15f)]
-    [SerializeField] private Light lanternBulb;
-    [SerializeField] private Light lanternBulbGlow;
+    [SerializeField] private Light bulbLightSource;
+    [SerializeField] private Light bulbGlowLightSource;
     
-    [SerializeField] private AudioSource lanternAudioSource;
-    [SerializeField] private AudioClip[] lanternAudioClips;
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip[] audioClips;
     
-    [SerializeField] private Material bulbLight;
-    [SerializeField] private Material bulbDark;
+    [SerializeField] private Material bulbLightMaterial;
+    [SerializeField] private Material bulbDarkMaterial;
     
-    [SerializeField] private MeshRenderer lanternMeshRenderer;
-    
-    [SerializeField] private bool changeMaterial = true;
-    
-    private PlayerControllerB _previousPlayerHeldBy;
+    [SerializeField] private MeshRenderer meshRenderer;
+
+    private bool _isTurnedOn;
 
     public override void Start()
     {
         base.Start();
-        if (lanternMeshRenderer == null) lanternMeshRenderer = GetComponent<MeshRenderer>();
+
+        _lanternId = Guid.NewGuid().ToString();
+        _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Lantern {_lanternId}");
+        Random.InitState(StartOfRound.Instance.randomMapSeed + _lanternId.GetHashCode());
+        
+        if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
+        if (meshRenderer == null) _mls.LogError("The mesh renderer component on the lantern is null.");
     }
 
     public override void ItemActivate(bool used, bool buttonDown = true)
     {
-        if (lanternAudioClips.Length == 0) return;
-        lanternAudioSource.PlayOneShot(lanternAudioClips[Random.Range(0, lanternAudioClips.Length)]);
-        RoundManager.Instance.PlayAudibleNoise(transform.position, 7f, 0.4f,
-            noiseIsInsideClosedShip: isInElevator && StartOfRound.Instance.hangarDoorsClosed);
+        base.ItemActivate(used, buttonDown);
+        isBeingUsed = used;
+        
+        // Play turn on/off noise
+        if (audioClips.Length > 0)
+        {
+            audioSource.PlayOneShot(audioClips[Random.Range(0, audioClips.Length)]);
+            RoundManager.Instance.PlayAudibleNoise(transform.position, 7f, 0.4f,
+                noiseIsInsideClosedShip: isInElevator && StartOfRound.Instance.hangarDoorsClosed);
+        }
+        
+        if (IsOwner) SwitchLanternStateServerRpc(!_isTurnedOn);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void SwitchLanternStateServerRpc(bool on)
+    {
+        if (_isTurnedOn == on) return;
+        SwitchLanternStateClientRpc(on);
+    }
+
+    [ClientRpc]
+    private void SwitchLanternStateClientRpc(bool on)
+    {
+        _isTurnedOn = on;
+        bulbLightSource.enabled = on;
+        bulbGlowLightSource.enabled = on;
+
+        Material[] sharedMaterials = meshRenderer.sharedMaterials;
+        sharedMaterials[0] = on ? bulbLightMaterial : bulbDarkMaterial;
+        meshRenderer.sharedMaterials = sharedMaterials;
     }
 
     public override void PocketItem()
     {
-        if (!IsOwner)
-        {
-            base.PocketItem();
-        }
-        else
-        {
-            if (_previousPlayerHeldBy != null)
-            {
-                lanternBulb.enabled = false;
-                lanternBulbGlow.enabled = false;
-                if (isBeingUsed && (_previousPlayerHeldBy.ItemSlots[_previousPlayerHeldBy.currentItemSlot] == null ||
-                                    _previousPlayerHeldBy.ItemSlots[_previousPlayerHeldBy.currentItemSlot].itemProperties.itemId != 1 || 
-                                    _previousPlayerHeldBy.ItemSlots[_previousPlayerHeldBy.currentItemSlot].itemProperties.itemId != 6))
-                {
-                    _previousPlayerHeldBy.pocketedFlashlight = this;
-                    PocketLanternServerRpc(true);
-                }
-                else
-                {
-                    isBeingUsed = false;
-                    lanternBulbGlow.enabled = false;
-                    SwitchFlashlight(false);
-                    PocketLanternServerRpc();
-                }
-            }
-
-            base.PocketItem();
-        }
-    }
-
-    [ServerRpc]
-    private void PocketLanternServerRpc(bool stillUsingFlashlight = false)
-    {
-        PocketLanternClientRpc(stillUsingFlashlight);
-    }
-
-    [ClientRpc]
-    private void PocketLanternClientRpc(bool stillUsingLantern)
-    {
-        lanternBulb.enabled = false;
-        lanternBulbGlow.enabled = false;
-        if (stillUsingLantern)
-        {
-            if (_previousPlayerHeldBy == null) return;
-            _previousPlayerHeldBy.pocketedFlashlight = this;
-        }
-        else
-        {
-            isBeingUsed = false;
-            lanternBulbGlow.enabled = false;
-            SwitchFlashlight(false);
-        }
+        base.PocketItem();
+        if (IsOwner) SwitchLanternStateServerRpc(false);
     }
 
     public override void DiscardItem()
     {
-        if (_previousPlayerHeldBy != null)
-        {
-            _previousPlayerHeldBy.helmetLight.enabled = false;
-            lanternBulb.enabled = isBeingUsed;
-            lanternBulbGlow.enabled = isBeingUsed;
-        }
-
         base.DiscardItem();
+        if (IsOwner) SwitchLanternStateServerRpc(false);
     }
-
-    public override void EquipItem()
+    
+    private void LogDebug(string msg)
     {
-        _previousPlayerHeldBy = playerHeldBy;
-        if (isBeingUsed) SwitchFlashlight(true);
-        base.EquipItem();
-    }
-
-    private void SwitchFlashlight(bool on)
-    {
-        isBeingUsed = on;
-        if (!IsOwner)
-        {
-            lanternBulb.enabled = false;
-            lanternBulbGlow.enabled = false;
-        }
-        else
-        {
-            lanternBulb.enabled = on;
-            lanternBulbGlow.enabled = on;
-        }
-        
-        if (!changeMaterial) return;
-        
-        Material[] sharedMaterials = lanternMeshRenderer.sharedMaterials;
-        sharedMaterials[0] = !on ? bulbDark : bulbLight;
-        lanternMeshRenderer.sharedMaterials = sharedMaterials;
+#if DEBUG
+        _mls?.LogInfo($"{msg}");
+#endif
     }
 }
