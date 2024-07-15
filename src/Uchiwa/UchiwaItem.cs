@@ -6,6 +6,7 @@ using GameNetcodeStuff;
 using Unity.Netcode;
 using UnityEngine;
 using Logger = BepInEx.Logging.Logger;
+using Random = UnityEngine.Random;
 
 namespace LethalCompanySeichiItems.Uchiwa;
 
@@ -42,13 +43,10 @@ public class UchiwaItem : GrabbableObject
 
     public override void ItemActivate(bool used, bool buttonDown = true)
     {
-        RoundManager.PlayRandomClip(uchiwaAudio, swingSfx);
-        if (playerHeldBy != null)
-        {
-            _previousPlayerHeldBy = playerHeldBy;
-            if (playerHeldBy.IsOwner)
-                playerHeldBy.playerBodyAnimator.SetTrigger(UseHeldItem1);
-        }
+        if (playerHeldBy == null) return;
+        _previousPlayerHeldBy = playerHeldBy;
+        if (playerHeldBy.IsOwner) playerHeldBy.playerBodyAnimator.SetTrigger(UseHeldItem1);
+        uchiwaAudio.PlayOneShot(swingSfx[Random.Range(0, swingSfx.Length)]);
 
         if (!IsOwner) return;
         HitUchiwa();
@@ -123,7 +121,7 @@ public class UchiwaItem : GrabbableObject
                                 }
                                 catch (Exception ex)
                                 {
-                                    _mls.LogInfo($"Exception caught when hitting object with shovel from player #{_previousPlayerHeldBy.playerClientId}: {ex}");
+                                    _mls.LogInfo($"Exception caught when hitting object with uchiwa from player #{_previousPlayerHeldBy.playerClientId}: {ex}");
                                 }
                             }
                         }
@@ -142,8 +140,7 @@ public class UchiwaItem : GrabbableObject
                 }
             }
 
-            if (!flag1)
-                return;
+            if (!flag1) return;
             RoundManager.PlayRandomClip(uchiwaAudio, hitSfx);
             FindObjectOfType<RoundManager>().PlayAudibleNoise(transform.position, 17f, 0.8f);
             if (!flag2 && hitSurfaceID != -1)
@@ -160,10 +157,20 @@ public class UchiwaItem : GrabbableObject
     [ServerRpc(RequireOwnership = false)]
     private void HealPlayerServerRpc(ulong playerId)
     {
-        PlayerControllerB player = StartOfRound.Instance.allPlayerScripts[playerId];
+        if ((int)playerId >= StartOfRound.Instance.allPlayerScripts.Length) return;
+        
+        PlayerControllerB player;
+        try
+        {
+            player = StartOfRound.Instance.allPlayerScripts[playerId];
+        }
+        catch (IndexOutOfRangeException)
+        {
+            return;
+        }
+        
         if (player == null)
         {
-            // Debug.Log("In Uchiwa heal player, the player is NULL");
             return;
         }
 

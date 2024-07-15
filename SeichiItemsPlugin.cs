@@ -24,7 +24,7 @@ public class SeichiItemsPlugin : BaseUnityPlugin
 {
     public const string ModGuid = $"LCM_SeichiItems|{ModVersion}";
     private const string ModName = "Lethal Company Seichi Items Mod";
-    private const string ModVersion = "3.0.2";
+    private const string ModVersion = "3.0.3";
     
     private readonly Harmony _harmony = new(ModGuid);
 

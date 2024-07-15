@@ -110,7 +110,7 @@ public class KanaboItem : GrabbableObject
         }
         
         yield return new WaitUntil(() => !_isHoldingButton || !isHeld);
-        SwingShovel(!isHeld);
+        SwingKanabo(!isHeld);
         yield return new WaitForSeconds(0.13f);
         yield return new WaitForEndOfFrame();
         HitKanabo(!isHeld);
@@ -119,7 +119,7 @@ public class KanaboItem : GrabbableObject
         _reelingUpCoroutine = null;
     }
 
-    public void SwingShovel(bool cancel = false)
+    public void SwingKanabo(bool cancel = false)
     {
         _previousPlayerHeldBy.playerBodyAnimator.SetBool(ReelingUp, false);
         if (cancel) return;

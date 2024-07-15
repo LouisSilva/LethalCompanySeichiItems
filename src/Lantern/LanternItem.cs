@@ -36,6 +36,9 @@ public class LanternItem : GrabbableObject
         
         if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
         if (meshRenderer == null) _mls.LogError("The mesh renderer component on the lantern is null.");
+        
+        if (bulbLightSource == null) _mls.LogError("The bulbLightSource on the lantern is null.");
+        if (bulbGlowLightSource == null) _mls.LogError("The bulbGlowLightSource on the lantern is null.");
     }
 
     public override void ItemActivate(bool used, bool buttonDown = true)
@@ -64,6 +67,7 @@ public class LanternItem : GrabbableObject
     [ClientRpc]
     private void SwitchLanternStateClientRpc(bool on)
     {
+        LogDebug($"Turned on?: {on}");
         _isTurnedOn = on;
         bulbLightSource.enabled = on;
         bulbGlowLightSource.enabled = on;
