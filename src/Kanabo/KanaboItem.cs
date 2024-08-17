@@ -83,30 +83,39 @@ public class KanaboItem : GrabbableObject
         playerHeldBy.playerBodyAnimator.ResetTrigger(ShovelHit);
         playerHeldBy.playerBodyAnimator.SetBool(ReelingUp, true);
         yield return null;
-
-        // replace state info stuff with finding the animation clip and getting its speed
+        
+        // Get the reel up animation clip
         AnimationClip reelingUpClip = playerHeldBy.playerBodyAnimator.runtimeAnimatorController.animationClips
             .FirstOrDefault(clip => clip.name == "ShovelReelUp");
 
+        // Check if we found the clip successfully.
         if (reelingUpClip != null)
         {
+            // Get the current player body animator speed.
             _origionalPlayerAnimatorSpeed = playerHeldBy.playerBodyAnimator.speed;
+            
+            // Get the length of the reel up animation.
             float animationOrigionalLength = reelingUpClip.length;
+            
+            // Calculate the new speed of the reel up.
             float newSpeed = animationOrigionalLength / reelUpTime;
             
+            // Set the player body animator to use the new speed.
             _animatorSpeedCurrentlyModified = true;
             playerHeldBy.playerBodyAnimator.speed = newSpeed;
+            
             kanaboAudio.PlayOneShot(reelUp);
             ReelUpSfxServerRpc();
-        
+            
+            // After the animation is done, change the player body animator speed back to normal.
             yield return new WaitForSeconds(reelUpTime);
-
             playerHeldBy.playerBodyAnimator.speed = _origionalPlayerAnimatorSpeed;
             _animatorSpeedCurrentlyModified = false;
         }
         else
         {
-            LogDebug("Reeling up clip was null");
+            // If the reel up animation clip was not found, report it as a warning.
+            _mls.LogWarning("The ShovelReelUp clip was null.");
         }
         
         yield return new WaitUntil(() => !_isHoldingButton || !isHeld);

@@ -15,10 +15,10 @@ public class UchiwaItem : GrabbableObject
     private ManualLogSource _mls;
     private string _uchiwaId;
     
-    [Tooltip("The amount of healing it does per swing.")]
+    [Tooltip("The amount of healing the Uchiwa does per swing.")]
     [SerializeField] private int healAmount = 5;
     
-    [Header("Audio")][Space(5f)]
+    [Header("Audio")] [Space(5f)]
     [SerializeField] private AudioSource uchiwaAudio;
     public AudioClip[] hitSfx;
     public AudioClip[] swingSfx;
@@ -46,9 +46,9 @@ public class UchiwaItem : GrabbableObject
         if (playerHeldBy == null) return;
         _previousPlayerHeldBy = playerHeldBy;
         if (playerHeldBy.IsOwner) playerHeldBy.playerBodyAnimator.SetTrigger(UseHeldItem1);
-        uchiwaAudio.PlayOneShot(swingSfx[Random.Range(0, swingSfx.Length)]);
-
         if (!IsOwner) return;
+        
+        PlayAudioClipTypeServerRpc(_uchiwaId, AudioClipTypes.Swing);
         HitUchiwa();
     }
 
@@ -62,7 +62,6 @@ public class UchiwaItem : GrabbableObject
         {
             _previousPlayerHeldBy.activatingItem = false;
             bool flag1 = false;
-            bool flag2 = false;
             int hitSurfaceID = -1;
             if (!cancel)
             {
@@ -116,12 +115,10 @@ public class UchiwaItem : GrabbableObject
                                             component.Hit(0, forward, _previousPlayerHeldBy, true, 5);
                                         }
                                     }
-
-                                    flag2 = true;
                                 }
                                 catch (Exception ex)
                                 {
-                                    _mls.LogInfo($"Exception caught when hitting object with uchiwa from player #{_previousPlayerHeldBy.playerClientId}: {ex}");
+                                    _mls.LogError($"Exception when hitting object with uchiwa from player #{_previousPlayerHeldBy.playerClientId}: {ex}");
                                 }
                             }
                         }
@@ -141,15 +138,8 @@ public class UchiwaItem : GrabbableObject
             }
 
             if (!flag1) return;
-            RoundManager.PlayRandomClip(uchiwaAudio, hitSfx);
-            FindObjectOfType<RoundManager>().PlayAudibleNoise(transform.position, 17f, 0.8f);
-            if (!flag2 && hitSurfaceID != -1)
-            {
-                uchiwaAudio.PlayOneShot(StartOfRound.Instance.footstepSurfaces[hitSurfaceID].hitSurfaceSFX);
-                WalkieTalkie.TransmitOneShotAudio(uchiwaAudio,
-                    StartOfRound.Instance.footstepSurfaces[hitSurfaceID].hitSurfaceSFX);
-            }
-
+            
+            PlayAudioClipTypeServerRpc(_uchiwaId, AudioClipTypes.Hit);
             HitUchiwaServerRpc(hitSurfaceID);
         }
     }
@@ -157,8 +147,6 @@ public class UchiwaItem : GrabbableObject
     [ServerRpc(RequireOwnership = false)]
     private void HealPlayerServerRpc(ulong playerId)
     {
-        if ((int)playerId >= StartOfRound.Instance.allPlayerScripts.Length) return;
-        
         PlayerControllerB player;
         try
         {
@@ -166,12 +154,13 @@ public class UchiwaItem : GrabbableObject
         }
         catch (IndexOutOfRangeException)
         {
+            _mls.LogError($"Tried to heal player with ID: {playerId}, but such player does not exist.");
             return;
         }
         
         if (player == null)
         {
-            return;
+            _mls.LogError($"Tried to heal player with ID: {playerId}, but the player object is null.");
         }
 
         int playerMaxHealth = GetPlayerMaxHealth(player);
@@ -192,7 +181,7 @@ public class UchiwaItem : GrabbableObject
         player.health = playerNewHealth;
         
         if (HUDManager.Instance.localPlayer == player)
-            HUDManager.Instance.UpdateHealthUI(GameNetworkManager.Instance.localPlayerController.health, false);
+            HUDManager.Instance.UpdateHealthUI(player.health, false);
     }
 
     [ServerRpc]
@@ -218,10 +207,8 @@ public class UchiwaItem : GrabbableObject
         // Check if the element at hitSurfaceID is not null and has a valid hitSurfaceSFX
         FootstepSurface surface = StartOfRound.Instance.footstepSurfaces[hitSurfaceID];
         if (surface == null || surface.hitSurfaceSFX == null) return;
-
-        // Play the sound
-        uchiwaAudio.PlayOneShot(surface.hitSurfaceSFX);
-        WalkieTalkie.TransmitOneShotAudio(uchiwaAudio, surface.hitSurfaceSFX);
+        
+        if (IsOwner) PlaySurfaceHitAudioClipServerRpc(_uchiwaId, hitSurfaceID);
     }
 
     /// <summary>
@@ -230,13 +217,94 @@ public class UchiwaItem : GrabbableObject
     /// </summary>
     /// <param name="player">The player to get the max health</param>
     /// <returns>The player's max health</returns>
-    private static int GetPlayerMaxHealth(PlayerControllerB player)
+    private int GetPlayerMaxHealth(PlayerControllerB player)
     {
         if (UchiwaSharedData.Instance.PlayersMaxHealth.ContainsKey(player))
         {
             return UchiwaSharedData.Instance.PlayersMaxHealth[player];
         }
 
+        _mls.LogError($"Could not get the health of player {player.playerUsername}. This should not happen.");
+
         return -1;
+    }
+
+    private enum AudioClipTypes
+    {
+        Hit,
+        Swing,
+        HitSurface,
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void PlaySurfaceHitAudioClipServerRpc(string receivedUchiwaId, int hitSurfaceId)
+    {
+        if (_uchiwaId != receivedUchiwaId) return;
+        
+        PlayAudioClipTypeClientRpc(receivedUchiwaId, AudioClipTypes.HitSurface, hitSurfaceId);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void PlayAudioClipTypeServerRpc(string receivedUchiwaId, AudioClipTypes audioClipType,
+        bool interrupt = false)
+    {
+        if (_uchiwaId != receivedUchiwaId) return;
+        
+        int numberOfAudioClips = audioClipType switch
+        {
+            AudioClipTypes.Hit => hitSfx.Length,
+            AudioClipTypes.Swing => swingSfx.Length,
+            _ => -1
+        };
+
+        switch (numberOfAudioClips)
+        {
+            case 0:
+                _mls.LogError($"There are no audio clips for audio clip type {audioClipType}.");
+                return;
+            
+            case -1:
+                _mls.LogError($"Audio Clip Type was not listed, cannot play audio clip. Number of audio clips: {numberOfAudioClips}.");
+                return;
+
+            default:
+            {
+                int clipIndex = Random.Range(0, numberOfAudioClips);
+                PlayAudioClipTypeClientRpc(receivedUchiwaId, audioClipType, clipIndex, interrupt);
+                break;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Plays an audio clip with the given type and index
+    /// </summary>
+    /// <param name="receivedUchiwaId">The Uchiwa ID.</param>
+    /// <param name="audioClipType">The audio clip type to play.</param>
+    /// <param name="clipIndex">The index of the clip in their respective AudioClip array to play.</param>
+    /// <param name="interrupt">Whether to interrupt any previously playing sound before playing the new audio.</param>
+    [ClientRpc]
+    private void PlayAudioClipTypeClientRpc(string receivedUchiwaId, AudioClipTypes audioClipType, int clipIndex,
+        bool interrupt = false)
+    {
+        if (_uchiwaId != receivedUchiwaId) return;
+
+        AudioClip audioClipToPlay = audioClipType switch
+        {
+            AudioClipTypes.Hit => hitSfx[clipIndex],
+            AudioClipTypes.Swing => swingSfx[clipIndex],
+            AudioClipTypes.HitSurface => StartOfRound.Instance.footstepSurfaces[clipIndex].hitSurfaceSFX,
+            _ => null
+        };
+
+        if (audioClipToPlay == null)
+        {
+            _mls.LogError($"Invalid audio clip with type: {audioClipType} and index: {clipIndex}");
+            return;
+        }
+        
+        if (interrupt) uchiwaAudio.Stop(true);
+        uchiwaAudio.PlayOneShot(audioClipToPlay);
+        WalkieTalkie.TransmitOneShotAudio(uchiwaAudio, audioClipToPlay, uchiwaAudio.volume);
     }
 }
