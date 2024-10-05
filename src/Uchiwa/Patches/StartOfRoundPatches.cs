@@ -1,8 +1,10 @@
 ﻿using GameNetcodeStuff;
 using HarmonyLib;
+using System.Diagnostics.CodeAnalysis;
 
 namespace LethalCompanySeichiItems.Uchiwa.Patches;
 
+[SuppressMessage("ReSharper", "InconsistentNaming")]
 [HarmonyPatch(typeof(StartOfRound))]
 internal class StartOfRoundPatches
 {

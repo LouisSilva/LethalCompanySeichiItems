@@ -48,10 +48,13 @@ public class KanaboItem : GrabbableObject
     public override void Start()
     {
         base.Start();
+        
         _kanaboId = Guid.NewGuid().ToString();
         _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Kanabo {_kanaboId}");
         hitForce = Mathf.Clamp(KanaboConfig.Instance.KanaboDamage.Value, 0, int.MaxValue);
         reelUpTime = Mathf.Clamp(KanaboConfig.Instance.KanaboReelUpTime.Value, 0.05f, int.MaxValue);
+        
+        _origionalPlayerAnimatorSpeed = StartOfRound.Instance.allPlayerScripts[0].playerBodyAnimator.speed;
     }
 
     private void OnDisable()
@@ -214,7 +217,7 @@ public class KanaboItem : GrabbableObject
 
             if (!flag1) return;
             RoundManager.PlayRandomClip(kanaboAudio, hitSfx);
-            FindObjectOfType<RoundManager>().PlayAudibleNoise(transform.position, 17f, 0.8f);
+            RoundManager.Instance.PlayAudibleNoise(transform.position, 17f, 0.8f);
             if (!flag2 && hitSurfaceID != -1)
             {
                 kanaboAudio.PlayOneShot(StartOfRound.Instance.footstepSurfaces[hitSurfaceID].hitSurfaceSFX);

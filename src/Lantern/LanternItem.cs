@@ -1,6 +1,5 @@
 ﻿using System;
 using BepInEx.Logging;
-using GameNetcodeStuff;
 using Unity.Netcode;
 using UnityEngine;
 using Logger = BepInEx.Logging.Logger;
@@ -25,7 +24,8 @@ public class LanternItem : GrabbableObject
     
     [SerializeField] private MeshRenderer meshRenderer;
 
-    [SerializeField] private GameObject lanternHelmetLight;
+    [SerializeField] private GameObject lanternHelmetLightObj;
+    private Light lanternHelmetLightSource;
 
     private bool _isTurnedOn;
 
@@ -42,22 +42,20 @@ public class LanternItem : GrabbableObject
         
         if (bulbLightSource == null) _mls.LogError("The bulbLightSource on the lantern is null.");
         if (bulbGlowLightSource == null) _mls.LogError("The bulbGlowLightSource on the lantern is null.");
-        if (lanternHelmetLight == null) _mls.LogError("The lanternHelmetLight gameobject on this lantern is null.");
+        if (lanternHelmetLightObj == null) _mls.LogError("The lanternHelmetLightObj gameobject on this lantern is null.");
 
-        foreach (PlayerControllerB player in StartOfRound.Instance.allPlayerScripts)
+        lanternHelmetLightSource = lanternHelmetLightObj.GetComponent<Light>();
+        if (lanternHelmetLightSource == null)
         {
-            if (player == null) continue;
-            
-            Transform helmetLightTransform = player.transform.Find("ScavengerModel/metarig/spine/spine.001/spine.002/spine.003/spine.004/spine.004_end/CameraContainer/HelmetLights");
-            if (helmetLightTransform == null)
-            {
-                _mls.LogError($"Could not find the helmet light transform for player: {player.playerUsername}.");
-            }
-            else
-            {
-                
-            }
+            lanternHelmetLightSource = lanternHelmetLightObj.GetComponentInChildren<Light>();
+            if (lanternHelmetLightSource == null) _mls.LogError("The lanternHelmetLightSource light component on this lantern is null.");
         }
+
+        lanternHelmetLightSource.gameObject.transform.position = transform.position;
+        
+        lanternHelmetLightSource.enabled = false;
+        bulbLightSource.enabled = false;
+        bulbGlowLightSource.enabled = false;
     }
 
     public override void ItemActivate(bool used, bool buttonDown = true)
@@ -69,7 +67,7 @@ public class LanternItem : GrabbableObject
         if (audioClips.Length > 0)
         {
             audioSource.PlayOneShot(audioClips[Random.Range(0, audioClips.Length)]);
-            RoundManager.Instance.PlayAudibleNoise(transform.position, 7f, 0.4f,
+            RoundManager.Instance.PlayAudibleNoise(transform.position, 6f, 0.3f,
                 noiseIsInsideClosedShip: isInElevator && StartOfRound.Instance.hangarDoorsClosed);
         }
         
@@ -90,18 +88,21 @@ public class LanternItem : GrabbableObject
         _isTurnedOn = on;
         bulbLightSource.enabled = on;
         bulbGlowLightSource.enabled = on;
+        lanternHelmetLightSource.enabled = on;
 
         Material[] sharedMaterials = meshRenderer.sharedMaterials;
         sharedMaterials[0] = on ? bulbLightMaterial : bulbDarkMaterial;
         meshRenderer.sharedMaterials = sharedMaterials;
+
+        lanternHelmetLightSource.gameObject.transform.position = on ? playerHeldBy.helmetLight.transform.position : transform.position;
+        lanternHelmetLightSource.gameObject.transform.rotation = on ? playerHeldBy.helmetLight.transform.rotation : Quaternion.identity;
     }
 
     public override void PocketItem()
     {
         base.PocketItem();
-        if (IsOwner) SwitchLanternStateServerRpc(false);
+        //if (IsOwner) SwitchLanternStateServerRpc(false);
     }
-
     public override void DiscardItem()
     {
         base.DiscardItem();
