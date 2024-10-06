@@ -13,7 +13,6 @@ namespace LethalCompanySeichiItems.Uchiwa;
 public class UchiwaItem : GrabbableObject
 {
     private ManualLogSource _mls;
-    private string _uchiwaId;
     
     [Tooltip("The amount of healing the Uchiwa does per swing.")]
     [SerializeField] private int healAmount = 5;
@@ -27,17 +26,24 @@ public class UchiwaItem : GrabbableObject
     
     private List<RaycastHit> _objectsHitByUchiwaList = [];
     private RaycastHit[] _objectsHitByUchiwa;
+
+    private readonly NetworkVariable<string> _uchiwaId = new();
     
     private static readonly int UseHeldItem1 = Animator.StringToHash("UseHeldItem1");
     private const int KnifeMask = 11012424;
     
     private float _timeAtLastDamageDealt;
-    
+
+    private void Awake()
+    {
+        if (!IsOwner) return;
+        _uchiwaId.Value = Guid.NewGuid().ToString();
+    }
+
     public override void Start()
     {
         base.Start();
-        _uchiwaId = Guid.NewGuid().ToString();
-        _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Uchiwa {_uchiwaId}");
+        _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Uchiwa {_uchiwaId.Value}");
         healAmount = Mathf.Clamp(UchiwaConfig.Instance.UchiwaHealAmount.Value, 0, int.MaxValue);
     }
 
@@ -48,7 +54,7 @@ public class UchiwaItem : GrabbableObject
         if (playerHeldBy.IsOwner) playerHeldBy.playerBodyAnimator.SetTrigger(UseHeldItem1);
         if (!IsOwner) return;
         
-        PlayAudioClipTypeServerRpc(_uchiwaId, AudioClipTypes.Swing);
+        PlayAudioClipTypeServerRpc(AudioClipTypes.Swing);
         HitUchiwa();
     }
 
@@ -62,6 +68,7 @@ public class UchiwaItem : GrabbableObject
         {
             _previousPlayerHeldBy.activatingItem = false;
             bool flag1 = false;
+            bool flag2 = false;
             int hitSurfaceID = -1;
             if (!cancel)
             {
@@ -71,8 +78,8 @@ public class UchiwaItem : GrabbableObject
                     _previousPlayerHeldBy.gameplayCamera.transform.right * 0.1f, 0.3f,
                     _previousPlayerHeldBy.gameplayCamera.transform.forward, 0.75f, KnifeMask,
                     QueryTriggerInteraction.Collide);
+                
                 _objectsHitByUchiwaList = _objectsHitByUchiwa.OrderBy(x => x.distance).ToList();
-
                 foreach (RaycastHit t in _objectsHitByUchiwaList)
                 {
                     RaycastHit objectsHitByUchiwa = t;
@@ -105,7 +112,8 @@ public class UchiwaItem : GrabbableObject
                                     if (Time.realtimeSinceStartup - (double)_timeAtLastDamageDealt > 0.4300000071525574)
                                     {
                                         _timeAtLastDamageDealt = Time.realtimeSinceStartup;
-
+                                        flag2 = true;
+                                        
                                         if (component is PlayerControllerB player)
                                         {
                                             HealPlayerServerRpc(player.actualClientId);
@@ -138,9 +146,12 @@ public class UchiwaItem : GrabbableObject
             }
 
             if (!flag1) return;
+            PlayAudioClipTypeServerRpc(AudioClipTypes.Hit);
             
-            PlayAudioClipTypeServerRpc(_uchiwaId, AudioClipTypes.Hit);
-            HitUchiwaServerRpc(hitSurfaceID);
+            if (!flag2 && hitSurfaceID != -1)
+            {
+                PlayAudioClipTypeClientRpc(AudioClipTypes.HitSurface, hitSurfaceID);
+            }
         }
     }
 
@@ -168,7 +179,7 @@ public class UchiwaItem : GrabbableObject
         
         int playerNewHealth = playerMaxHealth != -1
             ? Mathf.Min(player.health + healAmount, playerMaxHealth)
-            : player.health;
+            : Mathf.Min(player.health + healAmount, 100);
         // Debug.Log($"The new health is {player.health}");
         
         HealPlayerClientRpc(playerId, playerNewHealth);
@@ -182,33 +193,6 @@ public class UchiwaItem : GrabbableObject
         
         if (HUDManager.Instance.localPlayer == player)
             HUDManager.Instance.UpdateHealthUI(player.health, false);
-    }
-
-    [ServerRpc]
-    private void HitUchiwaServerRpc(int hitSurfaceID)
-    {
-        HitUchiwaClientRpc(hitSurfaceID);
-    }
-
-    [ClientRpc]
-    private void HitUchiwaClientRpc(int hitSurfaceID)
-    {
-        HitSurfaceWithUchiwa(hitSurfaceID);
-    }
-
-    private void HitSurfaceWithUchiwa(int hitSurfaceID)
-    {
-        // Check if footstepSurfaces is not null
-        if (StartOfRound.Instance.footstepSurfaces == null) return;
-
-        // Check if hitSurfaceID is within the valid range of footstepSurfaces array
-        if (hitSurfaceID < 0 || hitSurfaceID >= StartOfRound.Instance.footstepSurfaces.Length) return;
-
-        // Check if the element at hitSurfaceID is not null and has a valid hitSurfaceSFX
-        FootstepSurface surface = StartOfRound.Instance.footstepSurfaces[hitSurfaceID];
-        if (surface == null || surface.hitSurfaceSFX == null) return;
-        
-        if (IsOwner) PlaySurfaceHitAudioClipServerRpc(_uchiwaId, hitSurfaceID);
     }
 
     /// <summary>
@@ -235,21 +219,10 @@ public class UchiwaItem : GrabbableObject
         Swing,
         HitSurface,
     }
-
+    
     [ServerRpc(RequireOwnership = false)]
-    private void PlaySurfaceHitAudioClipServerRpc(string receivedUchiwaId, int hitSurfaceId)
+    private void PlayAudioClipTypeServerRpc(AudioClipTypes audioClipType, bool interrupt = false)
     {
-        if (_uchiwaId != receivedUchiwaId) return;
-        
-        PlayAudioClipTypeClientRpc(receivedUchiwaId, AudioClipTypes.HitSurface, hitSurfaceId);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    private void PlayAudioClipTypeServerRpc(string receivedUchiwaId, AudioClipTypes audioClipType,
-        bool interrupt = false)
-    {
-        if (_uchiwaId != receivedUchiwaId) return;
-        
         int numberOfAudioClips = audioClipType switch
         {
             AudioClipTypes.Hit => hitSfx.Length,
@@ -266,11 +239,11 @@ public class UchiwaItem : GrabbableObject
             case -1:
                 _mls.LogError($"Audio Clip Type was not listed, cannot play audio clip. Number of audio clips: {numberOfAudioClips}.");
                 return;
-
+            
             default:
             {
                 int clipIndex = Random.Range(0, numberOfAudioClips);
-                PlayAudioClipTypeClientRpc(receivedUchiwaId, audioClipType, clipIndex, interrupt);
+                PlayAudioClipTypeClientRpc(audioClipType, clipIndex, interrupt);
                 break;
             }
         }
@@ -279,16 +252,12 @@ public class UchiwaItem : GrabbableObject
     /// <summary>
     /// Plays an audio clip with the given type and index
     /// </summary>
-    /// <param name="receivedUchiwaId">The Uchiwa ID.</param>
     /// <param name="audioClipType">The audio clip type to play.</param>
     /// <param name="clipIndex">The index of the clip in their respective AudioClip array to play.</param>
     /// <param name="interrupt">Whether to interrupt any previously playing sound before playing the new audio.</param>
     [ClientRpc]
-    private void PlayAudioClipTypeClientRpc(string receivedUchiwaId, AudioClipTypes audioClipType, int clipIndex,
-        bool interrupt = false)
+    private void PlayAudioClipTypeClientRpc(AudioClipTypes audioClipType, int clipIndex, bool interrupt = false)
     {
-        if (_uchiwaId != receivedUchiwaId) return;
-
         AudioClip audioClipToPlay = audioClipType switch
         {
             AudioClipTypes.Hit => hitSfx[clipIndex],
@@ -306,5 +275,6 @@ public class UchiwaItem : GrabbableObject
         if (interrupt) uchiwaAudio.Stop(true);
         uchiwaAudio.PlayOneShot(audioClipToPlay);
         WalkieTalkie.TransmitOneShotAudio(uchiwaAudio, audioClipToPlay, uchiwaAudio.volume);
+        RoundManager.Instance.PlayAudibleNoise(transform.position, 8, 0.4f);
     }
 }

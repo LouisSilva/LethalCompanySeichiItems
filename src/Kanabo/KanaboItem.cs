@@ -1,19 +1,20 @@
-﻿using System;
+﻿using BepInEx.Logging;
+using GameNetcodeStuff;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using BepInEx.Logging;
-using GameNetcodeStuff;
 using Unity.Netcode;
 using UnityEngine;
 using Logger = BepInEx.Logging.Logger;
+using Random = UnityEngine.Random;
 
 namespace LethalCompanySeichiItems.Kanabo;
 
 public class KanaboItem : GrabbableObject
 {
     private ManualLogSource _mls;
-    private string _kanaboId;
+    private readonly NetworkVariable<string> _kanaboId = new();
     
     [Tooltip("The amount of damage the Kanabo does on a single hit.")]
     [SerializeField] private int hitForce = 2;
@@ -23,8 +24,8 @@ public class KanaboItem : GrabbableObject
 #pragma warning disable 0649
     [Header("Audio")] [Space(5f)]
     [SerializeField] private AudioSource kanaboAudio;
-    public AudioClip reelUp;
-    public AudioClip swing;
+    public AudioClip[] reelUpSfx;
+    public AudioClip[] swingSfx;
     public AudioClip[] hitSfx;
 #pragma warning restore 0649
 
@@ -45,24 +46,37 @@ public class KanaboItem : GrabbableObject
 
     private PlayerControllerB _previousPlayerHeldBy;
 
-    public override void Start()
+    private enum AudioClipTypes
     {
-        base.Start();
-        
-        _kanaboId = Guid.NewGuid().ToString();
-        _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Kanabo {_kanaboId}");
-        hitForce = Mathf.Clamp(KanaboConfig.Instance.KanaboDamage.Value, 0, int.MaxValue);
-        reelUpTime = Mathf.Clamp(KanaboConfig.Instance.KanaboReelUpTime.Value, 0.05f, int.MaxValue);
-        
-        _origionalPlayerAnimatorSpeed = StartOfRound.Instance.allPlayerScripts[0].playerBodyAnimator.speed;
+        ReelUp,
+        Swing,
+        Hit,
+        HitSurface
     }
 
+    private void Awake()
+    {
+        if (!IsOwner) return;
+        _kanaboId.Value = Guid.NewGuid().ToString();
+    }
+    
     private void OnDisable()
     {
         if (_animatorSpeedCurrentlyModified)
         {
             playerHeldBy.playerBodyAnimator.speed = _origionalPlayerAnimatorSpeed;
         }
+    }
+
+    public override void Start()
+    {
+        base.Start();
+        
+        _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Kanabo {_kanaboId.Value}");
+        hitForce = Mathf.Clamp(KanaboConfig.Instance.KanaboDamage.Value, 0, int.MaxValue);
+        reelUpTime = Mathf.Clamp(KanaboConfig.Instance.KanaboReelUpTime.Value, 0.05f, int.MaxValue);
+        
+        _origionalPlayerAnimatorSpeed = StartOfRound.Instance.allPlayerScripts[0].playerBodyAnimator.speed;
     }
 
     public override void ItemActivate(bool used, bool buttonDown = true)
@@ -107,8 +121,7 @@ public class KanaboItem : GrabbableObject
             _animatorSpeedCurrentlyModified = true;
             playerHeldBy.playerBodyAnimator.speed = newSpeed;
             
-            kanaboAudio.PlayOneShot(reelUp);
-            ReelUpSfxServerRpc();
+            PlayAudioClipTypeServerRpc(AudioClipTypes.ReelUp);
             
             // After the animation is done, change the player body animator speed back to normal.
             yield return new WaitForSeconds(reelUpTime);
@@ -135,7 +148,7 @@ public class KanaboItem : GrabbableObject
     {
         _previousPlayerHeldBy.playerBodyAnimator.SetBool(ReelingUp, false);
         if (cancel) return;
-        kanaboAudio.PlayOneShot(swing);
+        if (IsServer) PlayAudioClipTypeServerRpc(AudioClipTypes.Swing);
         _previousPlayerHeldBy.UpdateSpecialAnimationValue(true, 
             (short)_previousPlayerHeldBy.transform.localEulerAngles.y, 0.4f);
     }
@@ -216,30 +229,14 @@ public class KanaboItem : GrabbableObject
             }
 
             if (!flag1) return;
-            RoundManager.PlayRandomClip(kanaboAudio, hitSfx);
-            RoundManager.Instance.PlayAudibleNoise(transform.position, 17f, 0.8f);
             if (!flag2 && hitSurfaceID != -1)
             {
-                kanaboAudio.PlayOneShot(StartOfRound.Instance.footstepSurfaces[hitSurfaceID].hitSurfaceSFX);
-                WalkieTalkie.TransmitOneShotAudio(kanaboAudio,
-                    StartOfRound.Instance.footstepSurfaces[hitSurfaceID].hitSurfaceSFX);
+                PlayAudioClipTypeClientRpc(AudioClipTypes.HitSurface, hitSurfaceID);
             }
 
             playerHeldBy.playerBodyAnimator.SetTrigger(ShovelHit);
-            HitKanaboServerRpc(hitSurfaceID);
+            PlayAudioClipTypeServerRpc(AudioClipTypes.Hit);
         }
-    }
-    
-    [ServerRpc]
-    public void ReelUpSfxServerRpc()
-    {
-        ReelUpSfxClientRpc();
-    }
-
-    [ClientRpc]
-    public void ReelUpSfxClientRpc()
-    {
-        kanaboAudio.PlayOneShot(reelUp);
     }
 
     public override void DiscardItem()
@@ -247,26 +244,65 @@ public class KanaboItem : GrabbableObject
         if (playerHeldBy != null) playerHeldBy.activatingItem = false;
         base.DiscardItem();
     }
-
-    [ServerRpc]
-    private void HitKanaboServerRpc(int hitSurfaceID)
+    
+    [ServerRpc(RequireOwnership = false)]
+    private void PlayAudioClipTypeServerRpc(AudioClipTypes audioClipType, bool interrupt = false)
     {
-        HitKanaboClientRpc(hitSurfaceID);
-    }
+        int numberOfAudioClips = audioClipType switch
+        {
+            AudioClipTypes.Swing => swingSfx.Length,
+            AudioClipTypes.Hit => hitSfx.Length,
+            AudioClipTypes.ReelUp => reelUpSfx.Length,
+            _ => -1
+        };
 
+        switch (numberOfAudioClips)
+        {
+            case 0:
+                _mls.LogError($"There are no audio clips for audio clip type {audioClipType}.");
+                return;
+            
+            case -1:
+                _mls.LogError($"Audio Clip Type was not listed, cannot play audio clip. Number of audio clips: {numberOfAudioClips}.");
+                return;
+
+            default:
+            {
+                int clipIndex = Random.Range(0, numberOfAudioClips);
+                PlayAudioClipTypeClientRpc(audioClipType, clipIndex, interrupt);
+                break;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Plays an audio clip with the given type and index
+    /// </summary>
+    /// <param name="audioClipType">The audio clip type to play.</param>
+    /// <param name="clipIndex">The index of the clip in their respective AudioClip array to play.</param>
+    /// <param name="interrupt">Whether to interrupt any previously playing sound before playing the new audio.</param>
     [ClientRpc]
-    private void HitKanaboClientRpc(int hitSurfaceID)
+    private void PlayAudioClipTypeClientRpc(AudioClipTypes audioClipType, int clipIndex, bool interrupt = false)
     {
-        RoundManager.PlayRandomClip(kanaboAudio, hitSfx);
-        if (hitSurfaceID == -1) return;
-        HitSurfaceWithKanabo(hitSurfaceID);
-    }
+        AudioClip audioClipToPlay = audioClipType switch
+        {
+            AudioClipTypes.Hit => hitSfx[clipIndex],
+            AudioClipTypes.Swing => swingSfx[clipIndex],
+            AudioClipTypes.ReelUp => reelUpSfx[clipIndex],
+            AudioClipTypes.HitSurface => StartOfRound.Instance.footstepSurfaces[clipIndex].hitSurfaceSFX,
+            _ => null
+        };
 
-    private void HitSurfaceWithKanabo(int hitSurfaceID)
-    {
-        kanaboAudio.PlayOneShot(StartOfRound.Instance.footstepSurfaces[hitSurfaceID].hitSurfaceSFX);
-        WalkieTalkie.TransmitOneShotAudio(kanaboAudio,
-            StartOfRound.Instance.footstepSurfaces[hitSurfaceID].hitSurfaceSFX);
+        if (audioClipToPlay == null)
+        {
+            _mls.LogError($"Invalid audio clip with type: {audioClipType} and index: {clipIndex}");
+            return;
+        }
+        
+        if (interrupt) kanaboAudio.Stop(true);
+        kanaboAudio.PlayOneShot(audioClipToPlay);
+        WalkieTalkie.TransmitOneShotAudio(kanaboAudio, audioClipToPlay, kanaboAudio.volume);
+        RoundManager.Instance.PlayAudibleNoise(transform.position, 8, 0.4f);
     }
 
     private void LogDebug(string msg)
