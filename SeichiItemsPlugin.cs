@@ -16,7 +16,6 @@ using UnityEngine;
 namespace LethalCompanySeichiItems;
 
 [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
-[BepInDependency(LethalLib.Plugin.ModGUID)]
 [BepInDependency("linkoid-DissonanceLagFix-1.0.0", BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency("mattymatty-AsyncLoggers-1.6.3", BepInDependency.DependencyFlags.SoftDependency)]
 [BepInDependency("mattymatty-Matty_Fixes-1.0.21", BepInDependency.DependencyFlags.SoftDependency)]
@@ -24,7 +23,7 @@ public class SeichiItemsPlugin : BaseUnityPlugin
 {
     public const string ModGuid = $"LCM_SeichiItems|{ModVersion}";
     private const string ModName = "Lethal Company Seichi Items Mod";
-    private const string ModVersion = "3.1.1";
+    private const string ModVersion = "3.1.2";
 
     private readonly Harmony _harmony = new(ModGuid);
 

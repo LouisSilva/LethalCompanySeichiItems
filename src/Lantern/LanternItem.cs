@@ -12,7 +12,8 @@ public class LanternItem : GrabbableObject
     private ManualLogSource _mls;
     private string _lanternId;
     
-    [Space(15f)]
+#pragma warning disable 0649
+    [Header("Lantern Stuff")] [Space(15f)]
     [SerializeField] private Light bulbLightSource;
     [SerializeField] private Light bulbGlowLightSource;
     
@@ -26,6 +27,7 @@ public class LanternItem : GrabbableObject
 
     [SerializeField] private GameObject lanternHelmetLightObj;
     private Light lanternHelmetLightSource;
+#pragma warning restore 0649
 
     private bool _isTurnedOn;
 
@@ -56,6 +58,13 @@ public class LanternItem : GrabbableObject
         lanternHelmetLightSource.enabled = false;
         bulbLightSource.enabled = false;
         bulbGlowLightSource.enabled = false;
+    }
+
+    public override void LateUpdate()
+    {
+        lanternHelmetLightSource.gameObject.transform.position = _isTurnedOn ? playerHeldBy.helmetLight.transform.position : transform.position;
+        lanternHelmetLightSource.gameObject.transform.rotation = _isTurnedOn ? playerHeldBy.helmetLight.transform.rotation : Quaternion.identity;
+        base.LateUpdate();
     }
 
     public override void ItemActivate(bool used, bool buttonDown = true)
@@ -93,20 +102,6 @@ public class LanternItem : GrabbableObject
         Material[] sharedMaterials = meshRenderer.sharedMaterials;
         sharedMaterials[0] = on ? bulbLightMaterial : bulbDarkMaterial;
         meshRenderer.sharedMaterials = sharedMaterials;
-
-        lanternHelmetLightSource.gameObject.transform.position = on ? playerHeldBy.helmetLight.transform.position : transform.position;
-        lanternHelmetLightSource.gameObject.transform.rotation = on ? playerHeldBy.helmetLight.transform.rotation : Quaternion.identity;
-    }
-
-    public override void PocketItem()
-    {
-        base.PocketItem();
-        //if (IsOwner) SwitchLanternStateServerRpc(false);
-    }
-    public override void DiscardItem()
-    {
-        base.DiscardItem();
-        if (IsOwner) SwitchLanternStateServerRpc(false);
     }
     
     private void LogDebug(string msg)

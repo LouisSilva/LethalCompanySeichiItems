@@ -17,10 +17,12 @@ public class UchiwaItem : GrabbableObject
     [Tooltip("The amount of healing the Uchiwa does per swing.")]
     [SerializeField] private int healAmount = 5;
     
+#pragma warning disable 0649
     [Header("Audio")] [Space(5f)]
     [SerializeField] private AudioSource uchiwaAudio;
     public AudioClip[] hitSfx;
     public AudioClip[] swingSfx;
+#pragma warning restore 0649
     
     private PlayerControllerB _previousPlayerHeldBy;
     
