@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization.Formatters.Binary;
 using BepInEx;
+using BepInEx.Logging;
 using GameNetcodeStuff;
 using HarmonyLib;
 using LethalCompanySeichiItems.Kanabo;
@@ -29,6 +30,8 @@ public class SeichiItemsPlugin : BaseUnityPlugin
 
     private static SeichiItemsPlugin _instance;
 
+    private static readonly ManualLogSource Mls = new($"{ModGuid}");
+
     public static UchiwaConfig UchiwaConfigInstance { get; internal set; }
     public static KanaboConfig KanaboConfigInstance { get; internal set; }
 
@@ -44,6 +47,36 @@ public class SeichiItemsPlugin : BaseUnityPlugin
         _harmony.PatchAll(typeof(SeichiItemsPlugin));
 
         InitializeNetworkStuff();
+    }
+
+    internal enum LogLevel
+    {
+        Debug,
+        Info,
+        Warning,
+        Error,
+    }
+
+    internal static void Log(string msg, string prefix = "", LogLevel logLevel = LogLevel.Debug)
+    {
+        msg = $"{prefix}|{msg}";
+        switch (logLevel)
+        {
+            case LogLevel.Debug:
+                Mls.LogDebug(msg);
+                break;
+            case LogLevel.Info:
+                Mls.LogInfo(msg);
+                break;
+            case LogLevel.Warning:
+                Mls.LogWarning(msg);
+                break;
+            case LogLevel.Error:
+                Mls.LogError(msg);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(logLevel), logLevel, null); // Added as a formality
+        }
     }
 
     private static void InitializeNetworkStuff()

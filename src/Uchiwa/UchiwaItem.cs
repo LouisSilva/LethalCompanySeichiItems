@@ -1,18 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using BepInEx.Logging;
 using GameNetcodeStuff;
 using Unity.Netcode;
 using UnityEngine;
-using Logger = BepInEx.Logging.Logger;
 using Random = UnityEngine.Random;
 
 namespace LethalCompanySeichiItems.Uchiwa;
 
 public class UchiwaItem : GrabbableObject
 {
-    private ManualLogSource _mls;
+    private const string LOGPrefix = "Uchiwa";
     
     [Tooltip("The amount of healing the Uchiwa does per swing.")]
     [SerializeField] private int healAmount = 5;
@@ -28,24 +26,15 @@ public class UchiwaItem : GrabbableObject
     
     private List<RaycastHit> _objectsHitByUchiwaList = [];
     private RaycastHit[] _objectsHitByUchiwa;
-
-    private readonly NetworkVariable<string> _uchiwaId = new();
     
     private static readonly int UseHeldItem1 = Animator.StringToHash("UseHeldItem1");
     private const int KnifeMask = 11012424;
     
     private float _timeAtLastDamageDealt;
 
-    private void Awake()
-    {
-        if (!IsOwner) return;
-        _uchiwaId.Value = Guid.NewGuid().ToString();
-    }
-
     public override void Start()
     {
         base.Start();
-        _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Uchiwa {_uchiwaId.Value}");
         healAmount = Mathf.Clamp(UchiwaConfig.Instance.UchiwaHealAmount.Value, 0, int.MaxValue);
     }
 
@@ -64,7 +53,7 @@ public class UchiwaItem : GrabbableObject
     {
         if (_previousPlayerHeldBy == null)
         {
-            _mls.LogError("Variable '_previousPlayerHeldBy' is null on this client when HitUchiwa is called.");
+            SeichiItemsPlugin.Log("Variable '_previousPlayerHeldBy' is null on this client when HitUchiwa is called.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
         }
         else
         {
@@ -128,7 +117,7 @@ public class UchiwaItem : GrabbableObject
                                 }
                                 catch (Exception ex)
                                 {
-                                    _mls.LogError($"Exception when hitting object with uchiwa from player #{_previousPlayerHeldBy.playerClientId}: {ex}");
+                                    SeichiItemsPlugin.Log($"Exception when hitting object with uchiwa from player #{_previousPlayerHeldBy.playerClientId}: {ex}", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                                 }
                             }
                         }
@@ -167,13 +156,13 @@ public class UchiwaItem : GrabbableObject
         }
         catch (IndexOutOfRangeException)
         {
-            _mls.LogError($"Tried to heal player with ID: {playerId}, but such player does not exist.");
+            SeichiItemsPlugin.Log($"Tried to heal player with ID: {playerId}, but such player does not exist.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
             return;
         }
         
         if (player == null)
         {
-            _mls.LogError($"Tried to heal player with ID: {playerId}, but the player object is null.");
+            SeichiItemsPlugin.Log($"Tried to heal player with ID: {playerId}, but the player object is null.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
         }
 
         int playerMaxHealth = GetPlayerMaxHealth(player);
@@ -210,7 +199,7 @@ public class UchiwaItem : GrabbableObject
             return UchiwaSharedData.Instance.PlayersMaxHealth[player];
         }
 
-        _mls.LogError($"Could not get the health of player {player.playerUsername}. This should not happen.");
+        SeichiItemsPlugin.Log($"Could not get the health of player {player.playerUsername}. This should not happen.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
 
         return -1;
     }
@@ -235,11 +224,11 @@ public class UchiwaItem : GrabbableObject
         switch (numberOfAudioClips)
         {
             case 0:
-                _mls.LogError($"There are no audio clips for audio clip type {audioClipType}.");
+                SeichiItemsPlugin.Log($"There are no audio clips for audio clip type {audioClipType}.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                 return;
             
             case -1:
-                _mls.LogError($"Audio Clip Type was not listed, cannot play audio clip. Number of audio clips: {numberOfAudioClips}.");
+                SeichiItemsPlugin.Log($"Audio Clip Type was not listed, cannot play audio clip. Number of audio clips: {numberOfAudioClips}.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                 return;
             
             default:
@@ -270,7 +259,7 @@ public class UchiwaItem : GrabbableObject
 
         if (audioClipToPlay == null)
         {
-            _mls.LogError($"Invalid audio clip with type: {audioClipType} and index: {clipIndex}");
+            SeichiItemsPlugin.Log($"Invalid audio clip with type: {audioClipType} and index: {clipIndex}", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
             return;
         }
         

@@ -1,20 +1,17 @@
-﻿using BepInEx.Logging;
-using GameNetcodeStuff;
+﻿using GameNetcodeStuff;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
-using Logger = BepInEx.Logging.Logger;
 using Random = UnityEngine.Random;
 
 namespace LethalCompanySeichiItems.Kanabo;
 
 public class KanaboItem : GrabbableObject
 {
-    private ManualLogSource _mls;
-    private readonly NetworkVariable<string> _kanaboId = new();
+    private const string LOGPrefix = "Kanabo";
     
     [Tooltip("The amount of damage the Kanabo does on a single hit.")]
     [SerializeField] private int hitForce = 2;
@@ -53,12 +50,6 @@ public class KanaboItem : GrabbableObject
         Hit,
         HitSurface
     }
-
-    private void Awake()
-    {
-        if (!IsOwner) return;
-        _kanaboId.Value = Guid.NewGuid().ToString();
-    }
     
     private void OnDisable()
     {
@@ -72,7 +63,6 @@ public class KanaboItem : GrabbableObject
     {
         base.Start();
         
-        _mls = Logger.CreateLogSource($"{SeichiItemsPlugin.ModGuid} | Kanabo {_kanaboId.Value}");
         hitForce = Mathf.Clamp(KanaboConfig.Instance.KanaboDamage.Value, 0, int.MaxValue);
         reelUpTime = Mathf.Clamp(KanaboConfig.Instance.KanaboReelUpTime.Value, 0.05f, int.MaxValue);
         
@@ -131,7 +121,7 @@ public class KanaboItem : GrabbableObject
         else
         {
             // If the reel up animation clip was not found, report it as a warning.
-            _mls.LogWarning("The ShovelReelUp clip was null.");
+            SeichiItemsPlugin.Log("The ShovelReelUp clip was null.", LOGPrefix, SeichiItemsPlugin.LogLevel.Warning);
         }
         
         yield return new WaitUntil(() => !_isHoldingButton || !isHeld);
@@ -157,7 +147,7 @@ public class KanaboItem : GrabbableObject
     {
         if (_previousPlayerHeldBy == null)
         {
-            _mls.LogError("Variable '_previousPlayerHeldBy' is null on this client when HitKanabo is called.");
+            SeichiItemsPlugin.Log("Variable '_previousPlayerHeldBy' is null on this client when HitKanabo is called.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
         }
         else
         {
@@ -209,7 +199,7 @@ public class KanaboItem : GrabbableObject
                                 }
                                 catch (Exception ex)
                                 { 
-                                    _mls.LogInfo($"Exception caught when hitting object with Kanabo from player #{_previousPlayerHeldBy.playerClientId}: {ex}");
+                                    SeichiItemsPlugin.Log($"Exception caught when hitting object with Kanabo from player #{_previousPlayerHeldBy.playerClientId}: {ex}", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                                 }
                             }
                         }
@@ -259,11 +249,11 @@ public class KanaboItem : GrabbableObject
         switch (numberOfAudioClips)
         {
             case 0:
-                _mls.LogError($"There are no audio clips for audio clip type {audioClipType}.");
+                SeichiItemsPlugin.Log($"There are no audio clips for audio clip type {audioClipType}.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                 return;
             
             case -1:
-                _mls.LogError($"Audio Clip Type was not listed, cannot play audio clip. Number of audio clips: {numberOfAudioClips}.");
+                SeichiItemsPlugin.Log($"Audio Clip Type was not listed, cannot play audio clip. Number of audio clips: {numberOfAudioClips}.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                 return;
 
             default:
@@ -295,7 +285,7 @@ public class KanaboItem : GrabbableObject
 
         if (audioClipToPlay == null)
         {
-            _mls.LogError($"Invalid audio clip with type: {audioClipType} and index: {clipIndex}");
+            SeichiItemsPlugin.Log($"Invalid audio clip with type: {audioClipType} and index: {clipIndex}", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
             return;
         }
         
@@ -303,12 +293,5 @@ public class KanaboItem : GrabbableObject
         kanaboAudio.PlayOneShot(audioClipToPlay);
         WalkieTalkie.TransmitOneShotAudio(kanaboAudio, audioClipToPlay, kanaboAudio.volume);
         RoundManager.Instance.PlayAudibleNoise(transform.position, 8, 0.4f);
-    }
-
-    private void LogDebug(string msg)
-    {
-        #if DEBUG
-        _mls?.LogInfo($"{msg}");
-        #endif
     }
 }
