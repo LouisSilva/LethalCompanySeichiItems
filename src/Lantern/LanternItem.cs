@@ -22,15 +22,41 @@ public class LanternItem : GrabbableObject
     [SerializeField] private MeshRenderer meshRenderer;
 
     [SerializeField] private GameObject lanternHelmetLightPrefab;
-    private Light lanternHelmetLightSource;
 #pragma warning restore 0649
 
-    private bool _isTurnedOn;
-    private bool _isHelmetLightOn;
+    private GameObject lanternHelmetLightInstance;
+    private Light lanternHelmetLightSource;
+    
+    private readonly NetworkVariable<bool> _isMainLightOn = new();
+    private readonly NetworkVariable<bool> _isHelmetLightOn = new();
+    private readonly NetworkVariable<bool> _isOn = new();
+
+    private bool _subscribedToNetworkEvents;
+    private bool _hasInstantiated;
+
+    private void OnEnable()
+    {
+        SubscribeToNetworkEvents();
+    }
+
+    private void OnDisable()
+    {
+        UnsubscribeFromNetworkEvents();
+    }
+
+    public override void OnDestroy()
+    {
+        if (lanternHelmetLightInstance != null) Destroy(lanternHelmetLightInstance);
+        base.OnDestroy();
+    }
 
     public override void Start()
     {
         base.Start();
+        SeichiItemsPlugin.Log("bob");
+        
+        SubscribeToNetworkEvents();
+        if (_hasInstantiated) return;
         
         if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
         if (meshRenderer == null) SeichiItemsPlugin.Log("The mesh renderer component on the lantern is null.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
@@ -38,13 +64,12 @@ public class LanternItem : GrabbableObject
         if (bulbLightSource == null) SeichiItemsPlugin.Log("The bulbLightSource on the lantern is null.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
         if (bulbGlowLightSource == null) SeichiItemsPlugin.Log("The bulbGlowLightSource on the lantern is null.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
         if (lanternHelmetLightPrefab == null) SeichiItemsPlugin.Log("The lanternHelmetLightPrefab gameobject on this lantern is null.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
-
-
-        GameObject lanternHelmetLightObjInstance = Instantiate(lanternHelmetLightPrefab);
-        lanternHelmetLightSource = lanternHelmetLightObjInstance.GetComponent<Light>();
+        
+        lanternHelmetLightInstance = Instantiate(lanternHelmetLightPrefab);
+        lanternHelmetLightSource = lanternHelmetLightInstance.GetComponent<Light>();
         if (lanternHelmetLightSource == null)
         {
-            lanternHelmetLightSource = lanternHelmetLightObjInstance.GetComponentInChildren<Light>();
+            lanternHelmetLightSource = lanternHelmetLightInstance.GetComponentInChildren<Light>();
             if (lanternHelmetLightSource == null) SeichiItemsPlugin.Log("The lanternHelmetLightSource light component on this lantern is null.", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
         }
 
@@ -53,14 +78,16 @@ public class LanternItem : GrabbableObject
         lanternHelmetLightSource.enabled = false;
         bulbLightSource.enabled = false;
         bulbGlowLightSource.enabled = false;
+
+        _hasInstantiated = true;
     }
 
     public override void LateUpdate()
     {
-        if (_isHelmetLightOn)
+        if (_isHelmetLightOn.Value)
         {
-            lanternHelmetLightSource.gameObject.transform.position = playerHeldBy.helmetLight.transform.position;
-            lanternHelmetLightSource.gameObject.transform.rotation = playerHeldBy.helmetLight.transform.rotation;
+            lanternHelmetLightInstance.transform.position = playerHeldBy.helmetLight.transform.position;
+            lanternHelmetLightInstance.transform.rotation = playerHeldBy.helmetLight.transform.rotation;
         }
         
         base.LateUpdate();
@@ -79,63 +106,74 @@ public class LanternItem : GrabbableObject
                 noiseIsInsideClosedShip: isInElevator && StartOfRound.Instance.hangarDoorsClosed);
         }
         
-        if (IsOwner) SwitchLanternStateServerRpc(!_isTurnedOn);
+        if (IsOwner)
+        {
+            _isOn.Value = !_isOn.Value;
+            _isMainLightOn.Value = !_isMainLightOn.Value;
+            _isHelmetLightOn.Value = !_isHelmetLightOn.Value;
+        }
     }
 
     public override void DiscardItem()
     {
-        SwitchHelmetLightStateServerRpc(false);
+        if (IsOwner)
+        {
+            SeichiItemsPlugin.ChangeNetworkVar(_isHelmetLightOn, false);
+            SeichiItemsPlugin.ChangeNetworkVar(_isMainLightOn, _isOn.Value);
+        }
         base.DiscardItem();
     }
-
+    
     public override void EquipItem()
     {
-        SwitchHelmetLightStateServerRpc(true);
+        if (IsOwner)
+        {
+            SeichiItemsPlugin.ChangeNetworkVar(_isHelmetLightOn, _isOn.Value);
+            SeichiItemsPlugin.ChangeNetworkVar(_isMainLightOn, _isOn.Value);
+        }
         base.EquipItem();
     }
-    
-    [ServerRpc(RequireOwnership = false)]
-    private void SwitchHelmetLightStateServerRpc(bool on)
-    {
-        if (_isHelmetLightOn == on) return;
-        SwitchHelmetLightStateClientRpc(on);
-    }
 
-    [ClientRpc]
-    private void SwitchHelmetLightStateClientRpc(bool on)
+    public override void PocketItem()
     {
-        SeichiItemsPlugin.Log($"Helmet light on?: {on}", LOGPrefix);
-        if (_isTurnedOn && on)
+        if (IsOwner)
         {
-            _isHelmetLightOn = true;
-            lanternHelmetLightSource.enabled = true;
+            SeichiItemsPlugin.ChangeNetworkVar(_isHelmetLightOn, _isOn.Value);
+            SeichiItemsPlugin.ChangeNetworkVar(_isMainLightOn, false);
         }
-        else
-        {
-            _isHelmetLightOn = false;
-            lanternHelmetLightSource.enabled = false;
-        }
+        base.PocketItem();
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    private void SwitchLanternStateServerRpc(bool on)
+    private void OnMainLightToggled(bool oldIsTurnedOn, bool newIsTurnedOn)
     {
-        if (_isTurnedOn == on) return;
-        SwitchLanternStateClientRpc(on);
-    }
-
-    [ClientRpc]
-    private void SwitchLanternStateClientRpc(bool on)
-    {
-        SeichiItemsPlugin.Log($"Turned on?: {on}", LOGPrefix);
-        _isTurnedOn = on;
-        _isHelmetLightOn = on;
-        bulbLightSource.enabled = on;
-        bulbGlowLightSource.enabled = on;
-        lanternHelmetLightSource.enabled = on;
+        SeichiItemsPlugin.Log($"Main light on?: {newIsTurnedOn}", LOGPrefix);
+        bulbLightSource.enabled = newIsTurnedOn;
+        bulbGlowLightSource.enabled = newIsTurnedOn;
 
         Material[] sharedMaterials = meshRenderer.sharedMaterials;
-        sharedMaterials[0] = on ? bulbLightMaterial : bulbDarkMaterial;
+        sharedMaterials[0] = newIsTurnedOn ? bulbLightMaterial : bulbDarkMaterial;
         meshRenderer.sharedMaterials = sharedMaterials;
+    }
+
+    private void OnHelmetLightToggled(bool oldIsTurnedOn, bool newIsTurnedOn)
+    {
+        SeichiItemsPlugin.Log($"Helmet light on?: {newIsTurnedOn}", LOGPrefix);
+        lanternHelmetLightSource.enabled = newIsTurnedOn;
+    }
+
+    private void SubscribeToNetworkEvents()
+    {
+        if (_subscribedToNetworkEvents) return;
+        _isMainLightOn.OnValueChanged += OnMainLightToggled;
+        _isHelmetLightOn.OnValueChanged += OnHelmetLightToggled;
+        _subscribedToNetworkEvents = true;
+    }
+
+    private void UnsubscribeFromNetworkEvents()
+    {
+        if (!_subscribedToNetworkEvents) return;
+        _isMainLightOn.OnValueChanged -= OnMainLightToggled;
+        _isHelmetLightOn.OnValueChanged -= OnHelmetLightToggled;
+        _subscribedToNetworkEvents = false;
     }
 }

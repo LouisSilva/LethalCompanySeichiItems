@@ -4,7 +4,7 @@ namespace LethalCompanySeichiItems.Uchiwa;
 
 public class UchiwaConfig : SyncedInstance<UchiwaConfig>
 {
-    public readonly ConfigEntry<int> UchiwaHealAmount;
+    internal readonly ConfigEntry<int> UchiwaHealAmount;
     
     public UchiwaConfig(ConfigFile cfg)
     {

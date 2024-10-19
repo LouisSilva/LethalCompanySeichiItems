@@ -24,7 +24,7 @@ public class SeichiItemsPlugin : BaseUnityPlugin
 {
     public const string ModGuid = $"LCM_SeichiItems|{ModVersion}";
     private const string ModName = "Lethal Company Seichi Items Mod";
-    private const string ModVersion = "3.1.2";
+    private const string ModVersion = "3.1.3";
 
     private readonly Harmony _harmony = new(ModGuid);
 
@@ -76,6 +76,14 @@ public class SeichiItemsPlugin : BaseUnityPlugin
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(logLevel), logLevel, null); // Added as a formality
+        }
+    }
+    
+    internal static void ChangeNetworkVar<T>(NetworkVariable<T> networkVariable, T newValue) where T : IEquatable<T>
+    {
+        if (!EqualityComparer<T>.Default.Equals(networkVariable.Value, newValue))
+        {
+            networkVariable.Value = newValue;
         }
     }
 
