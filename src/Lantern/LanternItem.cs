@@ -14,7 +14,8 @@ public class LanternItem : GrabbableObject
     [SerializeField] private Light bulbGlowLightSource;
     
     [SerializeField] private AudioSource audioSource;
-    [SerializeField] private AudioClip[] audioClips;
+    [SerializeField] private AudioClip[] turnOnAudioClips;
+    [SerializeField] private AudioClip[] turnOffAudioClips;
     
     [SerializeField] private Material bulbLightMaterial;
     [SerializeField] private Material bulbDarkMaterial;
@@ -53,7 +54,6 @@ public class LanternItem : GrabbableObject
     public override void Start()
     {
         base.Start();
-        SeichiItemsPlugin.Log("bob");
         
         SubscribeToNetworkEvents();
         if (_hasInstantiated) return;
@@ -97,11 +97,22 @@ public class LanternItem : GrabbableObject
     {
         base.ItemActivate(used, buttonDown);
         isBeingUsed = used;
-        
-        // Play turn on/off noise
-        if (audioClips.Length > 0)
+
+        bool clipPlayed = false;
+        switch (_isOn.Value)
         {
-            audioSource.PlayOneShot(audioClips[Random.Range(0, audioClips.Length)]);
+            case false when turnOnAudioClips.Length > 0:
+                audioSource.PlayOneShot(turnOnAudioClips[Random.Range(0, turnOnAudioClips.Length)]);
+                clipPlayed = true;
+                break;
+            case true when turnOffAudioClips.Length > 0:
+                audioSource.PlayOneShot(turnOffAudioClips[Random.Range(0, turnOffAudioClips.Length)]);
+                clipPlayed = true;
+                break;
+        }
+
+        if (clipPlayed)
+        {
             RoundManager.Instance.PlayAudibleNoise(transform.position, 6f, 0.3f,
                 noiseIsInsideClosedShip: isInElevator && StartOfRound.Instance.hangarDoorsClosed);
         }
