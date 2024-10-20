@@ -28,9 +28,9 @@ public class LanternItem : GrabbableObject
     private GameObject lanternHelmetLightInstance;
     private Light lanternHelmetLightSource;
     
-    private readonly NetworkVariable<bool> _isMainLightOn = new();
-    private readonly NetworkVariable<bool> _isHelmetLightOn = new();
-    private readonly NetworkVariable<bool> _isOn = new();
+    private readonly NetworkVariable<bool> _isMainLightOn = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+    private readonly NetworkVariable<bool> _isHelmetLightOn = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+    private readonly NetworkVariable<bool> _isOn = new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
     private bool _subscribedToNetworkEvents;
     private bool _hasInstantiated;
@@ -53,8 +53,6 @@ public class LanternItem : GrabbableObject
 
     public override void Start()
     {
-        base.Start();
-        
         SubscribeToNetworkEvents();
         if (_hasInstantiated) return;
         
@@ -80,14 +78,27 @@ public class LanternItem : GrabbableObject
         bulbGlowLightSource.enabled = false;
 
         _hasInstantiated = true;
+        
+        base.Start();
     }
 
     public override void LateUpdate()
     {
-        if (_isHelmetLightOn.Value)
+        if ((isHeld || isPocketed) && _isOn.Value && _isHelmetLightOn.Value)
         {
-            lanternHelmetLightInstance.transform.position = playerHeldBy.helmetLight.transform.position;
-            lanternHelmetLightInstance.transform.rotation = playerHeldBy.helmetLight.transform.rotation;
+            if (lanternHelmetLightInstance == null)
+            {
+                SeichiItemsPlugin.Log("bruh1", LOGPrefix);
+            }
+            else if (playerHeldBy == null)
+            {
+                SeichiItemsPlugin.Log("bruh2", LOGPrefix);
+            }
+            else
+            {
+                lanternHelmetLightInstance.transform.position = playerHeldBy.helmetLight.transform.position;
+                lanternHelmetLightInstance.transform.rotation = playerHeldBy.helmetLight.transform.rotation;
+            }
         }
         
         base.LateUpdate();
