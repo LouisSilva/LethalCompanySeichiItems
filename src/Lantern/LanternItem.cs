@@ -86,19 +86,8 @@ public class LanternItem : GrabbableObject
     {
         if ((isHeld || isPocketed) && _isOn.Value && _isHelmetLightOn.Value)
         {
-            if (lanternHelmetLightInstance == null)
-            {
-                SeichiItemsPlugin.Log("bruh1", LOGPrefix);
-            }
-            else if (playerHeldBy == null)
-            {
-                SeichiItemsPlugin.Log("bruh2", LOGPrefix);
-            }
-            else
-            {
-                lanternHelmetLightInstance.transform.position = playerHeldBy.helmetLight.transform.position;
-                lanternHelmetLightInstance.transform.rotation = playerHeldBy.helmetLight.transform.rotation;
-            }
+            lanternHelmetLightInstance.transform.position = playerHeldBy.helmetLight.transform.position;
+            lanternHelmetLightInstance.transform.rotation = playerHeldBy.helmetLight.transform.rotation;
         }
         
         base.LateUpdate();
