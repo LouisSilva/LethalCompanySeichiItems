@@ -16,15 +16,13 @@ using UnityEngine;
 
 namespace LethalCompanySeichiItems;
 
-[BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
+[BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 [BepInDependency("linkoid-DissonanceLagFix-1.0.0", BepInDependency.DependencyFlags.SoftDependency)]
-[BepInDependency("mattymatty-AsyncLoggers-1.6.3", BepInDependency.DependencyFlags.SoftDependency)]
-[BepInDependency("mattymatty-Matty_Fixes-1.0.21", BepInDependency.DependencyFlags.SoftDependency)]
 public class SeichiItemsPlugin : BaseUnityPlugin
 {
     public const string ModGuid = $"LCM_SeichiItems|{ModVersion}";
     private const string ModName = "Lethal Company Seichi Items Mod";
-    private const string ModVersion = "3.1.8";
+    private const string ModVersion = "3.1.9";
 
     private readonly Harmony _harmony = new(ModGuid);
 
@@ -103,8 +101,9 @@ public class SeichiItemsPlugin : BaseUnityPlugin
         {
             MethodInfo[] methods =
                 type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            foreach (MethodInfo method in methods)
+            for (int i = 0; i < methods.Length; i++)
             {
+                MethodInfo method = methods[i];
                 object[] attributes = method.GetCustomAttributes(typeof(RuntimeInitializeOnLoadMethodAttribute), false);
                 if (attributes.Length > 0)
                 {

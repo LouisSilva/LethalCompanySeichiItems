@@ -195,11 +195,12 @@ public class KanaboItem : GrabbableObject
                     _previousPlayerHeldBy.gameplayCamera.transform.forward, 1.5f, ShovelMask,
                     QueryTriggerInteraction.Collide);
                 _objectsHitByKanaboList = _objectsHitByKanabo.OrderBy(x => x.distance).ToList();
-                
-                foreach (RaycastHit t in _objectsHitByKanaboList)
+
+                for (int i = 0; i < _objectsHitByKanaboList.Count; i++)
                 {
+                    RaycastHit t = _objectsHitByKanaboList[i];
                     RaycastHit objectsHitByKanabo = t;
-                    if (objectsHitByKanabo.transform.gameObject.layer != 8 && 
+                    if (objectsHitByKanabo.transform.gameObject.layer != 8 &&
                         objectsHitByKanabo.transform.gameObject.layer != 11)
                     {
                         objectsHitByKanabo = t;
@@ -229,8 +230,10 @@ public class KanaboItem : GrabbableObject
                                     flag2 = true;
                                 }
                                 catch (Exception ex)
-                                { 
-                                    SeichiItemsPlugin.Log($"Exception caught when hitting object with Kanabo from player {_previousPlayerHeldBy.playerUsername}: {ex}", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
+                                {
+                                    SeichiItemsPlugin.Log(
+                                        $"Exception caught when hitting object with Kanabo from player {_previousPlayerHeldBy.playerUsername}: {ex}",
+                                        LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                                 }
                             }
                         }
@@ -242,7 +245,8 @@ public class KanaboItem : GrabbableObject
                     objectsHitByKanabo = t;
                     for (int index2 = 0; index2 < StartOfRound.Instance.footstepSurfaces.Length; ++index2)
                     {
-                        if (StartOfRound.Instance.footstepSurfaces[index2].surfaceTag != objectsHitByKanabo.collider.gameObject.tag) continue;
+                        if (StartOfRound.Instance.footstepSurfaces[index2].surfaceTag !=
+                            objectsHitByKanabo.collider.gameObject.tag) continue;
                         hitSurfaceID = index2;
                         break;
                     }

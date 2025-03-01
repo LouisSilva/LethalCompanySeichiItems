@@ -40,10 +40,15 @@ public class UchiwaItem : GrabbableObject
 
     public override void ItemActivate(bool used, bool buttonDown = true)
     {
-        if (playerHeldBy == null) return;
-        _previousPlayerHeldBy = playerHeldBy;
-        if (playerHeldBy.IsOwner) playerHeldBy.playerBodyAnimator.SetTrigger(UseHeldItem1);
-        if (!IsOwner) return;
+        if (playerHeldBy != null)
+        {
+            _previousPlayerHeldBy = playerHeldBy;
+            if (playerHeldBy.IsOwner)
+                playerHeldBy.playerBodyAnimator.SetTrigger(UseHeldItem1);
+        }
+        
+        if (!IsOwner) 
+            return;
         
         PlayAudioClipTypeServerRpc(AudioClipTypes.Swing);
         HitUchiwa();
@@ -71,8 +76,9 @@ public class UchiwaItem : GrabbableObject
                     QueryTriggerInteraction.Collide);
                 
                 _objectsHitByUchiwaList = _objectsHitByUchiwa.OrderBy(x => x.distance).ToList();
-                foreach (RaycastHit t in _objectsHitByUchiwaList)
+                for (int i = 0; i < _objectsHitByUchiwaList.Count; i++)
                 {
+                    RaycastHit t = _objectsHitByUchiwaList[i];
                     RaycastHit objectsHitByUchiwa = t;
                     if (objectsHitByUchiwa.transform.gameObject.layer != 8 &&
                         objectsHitByUchiwa.transform.gameObject.layer != 11)
@@ -95,7 +101,7 @@ public class UchiwaItem : GrabbableObject
                                     if (Physics.Linecast(position, point, out local, roomMaskAndDefault))
                                         continue;
                                 }
-
+                                
                                 flag1 = true;
                                 Vector3 forward = _previousPlayerHeldBy.gameplayCamera.transform.forward;
                                 try
@@ -104,7 +110,7 @@ public class UchiwaItem : GrabbableObject
                                     {
                                         _timeAtLastDamageDealt = Time.realtimeSinceStartup;
                                         flag2 = true;
-                                        
+
                                         if (component is PlayerControllerB player)
                                         {
                                             HealPlayerServerRpc(player.actualClientId);
@@ -117,25 +123,28 @@ public class UchiwaItem : GrabbableObject
                                 }
                                 catch (Exception ex)
                                 {
-                                    SeichiItemsPlugin.Log($"Exception when hitting object with uchiwa from player #{_previousPlayerHeldBy.playerClientId}: {ex}", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
+                                    SeichiItemsPlugin.Log(
+                                        $"Exception when hitting object with uchiwa from player #{_previousPlayerHeldBy.playerClientId}: {ex}",
+                                        LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
                                 }
                             }
                         }
-
+                        
                         continue;
                     }
-
+                    
                     flag1 = true;
                     objectsHitByUchiwa = t;
-                    for (int index2 = 0; index2 < StartOfRound.Instance.footstepSurfaces.Length; ++index2)
+                    for (int j = 0; j < StartOfRound.Instance.footstepSurfaces.Length; ++j)
                     {
-                        if (StartOfRound.Instance.footstepSurfaces[index2].surfaceTag != objectsHitByUchiwa.collider.gameObject.tag) continue;
-                        hitSurfaceID = index2;
+                        if (StartOfRound.Instance.footstepSurfaces[j].surfaceTag !=
+                            objectsHitByUchiwa.collider.gameObject.tag) continue;
+                        hitSurfaceID = j;
                         break;
                     }
                 }
             }
-
+            
             if (!flag1) return;
             PlayAudioClipTypeServerRpc(AudioClipTypes.Hit);
             
@@ -192,7 +201,7 @@ public class UchiwaItem : GrabbableObject
     /// </summary>
     /// <param name="player">The player to get the max health</param>
     /// <returns>The player's max health</returns>
-    private int GetPlayerMaxHealth(PlayerControllerB player)
+    private static int GetPlayerMaxHealth(PlayerControllerB player)
     {
         if (UchiwaSharedData.Instance.PlayersMaxHealth.ContainsKey(player))
         {
@@ -256,7 +265,7 @@ public class UchiwaItem : GrabbableObject
             AudioClipTypes.HitSurface => StartOfRound.Instance.footstepSurfaces[clipIndex].hitSurfaceSFX,
             _ => null
         };
-
+        
         if (audioClipToPlay == null)
         {
             SeichiItemsPlugin.Log($"Invalid audio clip with type: {audioClipType} and index: {clipIndex}", LOGPrefix, SeichiItemsPlugin.LogLevel.Error);
